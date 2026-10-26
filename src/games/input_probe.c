@@ -1,4 +1,5 @@
 #include "openconsole/uefi.h"
+#include "openconsole/platform_debug.h"
 
 #define EFI_GRAPHICS_OUTPUT_BLT_VIDEO_FILL 0u
 
@@ -6,7 +7,7 @@ static const EFI_GUID gop_guid =
     {0x9042a9deu, 0x23dcu, 0x4a38u, {0x96,0xfb,0x7a,0xde,0xd0,0x80,0x51,0x6a}};
 
 static void debug_putc(char value) {
-    __asm__ volatile("outb %0, %1" : : "a"(value), "Nd"((uint16_t)0x402));
+    oc_platform_debug_putc(value);
 }
 
 static void debug_write(const char *text) {
@@ -28,6 +29,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
                  gop->mode->info->vertical_resolution, 0);
     }
     system_table->con_out->output_string(system_table->con_out, message);
+    debug_write("OPENCONSOLE_CHILD_ABI_NEGOTIATED_UEFI_INPUT_1_0\n");
     debug_write("OPENCONSOLE_CHILD_READY\n");
     for (;;) {
         if (EFI_ERROR(system_table->boot_services->wait_for_event(
@@ -37,4 +39,3 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     debug_write("OPENCONSOLE_CHILD_KEY_RECEIVED\n");
     return EFI_SUCCESS;
 }
-

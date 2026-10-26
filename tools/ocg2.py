@@ -25,8 +25,11 @@ SIGN_DOMAIN = b"OPENCONSOLE-OCG2-SIGNED\0"
 ENVELOPE = struct.Struct("<4sHHIIQQIHHQ32s32s16s")
 INDEX_HEADER = struct.Struct("<4sHHIIIIIIQQ32s")
 ENTRY = struct.Struct("<HHIQQ32s")
-ROLES = {"manifest": 1, "entry-x64": 2, "jacket-ocj1": 3, "controls-v1": 4, "data": 5}
+ROLES = {"manifest": 1, "entry-x64": 2, "jacket-ocj1": 3, "controls-v1": 4,
+         "data": 5, "entry-arm64": 6}
 ROLE_NAMES = {value: name for name, value in ROLES.items()}
+ENTRY_ROLE = {"x64": "entry-x64", "arm64": "entry-arm64"}
+PE_MACHINE = {"x64": 0x8664, "arm64": 0xAA64}
 PATH_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 VERSION_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,31}$")
@@ -147,7 +150,7 @@ def parse_manifest(data: bytes) -> dict[str, object]:
         raise Ocg2Error("OCG2_MANIFEST_MISMATCH", "invalid game id")
     if not isinstance(fields["version"], str) or not VERSION_RE.fullmatch(fields["version"]):
         raise Ocg2Error("OCG2_MANIFEST_MISMATCH", "invalid game version")
-    if fields["architecture"] != "x64" or fields["graphics_api"] not in ("gop", "gles2"):
+    if fields["architecture"] not in ENTRY_ROLE or fields["graphics_api"] not in ("gop", "gles2"):
         raise Ocg2Error("OCG2_MANIFEST_MISMATCH", "unsupported architecture or graphics API")
     if fields["accel"] not in ("forbidden", "optional", "required"):
         raise Ocg2Error("OCG2_MANIFEST_MISMATCH", "invalid acceleration policy")
@@ -169,6 +172,24 @@ def parse_manifest(data: bytes) -> dict[str, object]:
                 raise Ocg2Error("OCG2_MANIFEST_MISMATCH", f"{key} must be a string")
             canonical_path(fields[key])
     return fields
+
+
+def validate_entry_pe(data: bytes, architecture: str) -> None:
+    if len(data) < 64 or data[:2] != b"MZ":
+        raise Ocg2Error("OCG2_MANIFEST_MISMATCH", "entry is not a PE/COFF image")
+    pe = struct.unpack_from("<I", data, 0x3C)[0]
+    if pe > len(data) - 24 or data[pe:pe + 4] != b"PE\0\0":
+        raise Ocg2Error("OCG2_MANIFEST_MISMATCH", "entry has no bounded PE signature")
+    machine = struct.unpack_from("<H", data, pe + 4)[0]
+    optional_size = struct.unpack_from("<H", data, pe + 20)[0]
+    optional = pe + 24
+    if (machine != PE_MACHINE[architecture] or optional_size < 112 or
+            optional > len(data) - optional_size or
+            struct.unpack_from("<H", data, optional)[0] != 0x20B or
+            struct.unpack_from("<H", data, optional + 68)[0] != 10):
+        raise Ocg2Error(
+            "OCG2_MANIFEST_MISMATCH",
+            f"entry PE machine/subsystem does not match {architecture} EFI application")
 
 
 def load_private_key(path: pathlib.Path) -> Ed448PrivateKey:
@@ -222,9 +243,10 @@ def make_index(game_id: str, version: str, key_id: bytes,
         prepared.append((path, role, data))
     prepared.sort(key=lambda item: item[0].encode("ascii"))
     manifests = [i for i, item in enumerate(prepared) if item[1] == ROLES["manifest"]]
-    entries_x64 = [i for i, item in enumerate(prepared) if item[1] == ROLES["entry-x64"]]
-    if len(manifests) != 1 or len(entries_x64) != 1 or prepared[manifests[0]][0] != "game.toml":
-        raise Ocg2Error("OCG2_BAD_ROLE", "bundle needs one game.toml manifest and one x64 entry")
+    entry_roles = {ROLES["entry-x64"], ROLES["entry-arm64"]}
+    entries = [i for i, item in enumerate(prepared) if item[1] in entry_roles]
+    if len(manifests) != 1 or len(entries) != 1 or prepared[manifests[0]][0] != "game.toml":
+        raise Ocg2Error("OCG2_BAD_ROLE", "bundle needs one game.toml manifest and one architecture entry")
     if sum(item[1] == ROLES["jacket-ocj1"] for item in prepared) > 1 or sum(
             item[1] == ROLES["controls-v1"] for item in prepared) > 1:
         raise Ocg2Error("OCG2_BAD_ROLE", "jacket and controls roles are singular")
@@ -250,16 +272,27 @@ def pack(manifest_path: pathlib.Path, role_sources: dict[str, pathlib.Path],
     manifest = manifest_path.read_bytes()
     fields = parse_manifest(manifest)
     files: list[tuple[str, int, bytes]] = [("game.toml", ROLES["manifest"], manifest)]
-    expected_roles = (("entry", "entry-x64"), ("jacket", "jacket-ocj1"),
+    architecture = str(fields["architecture"])
+    entry_role = ENTRY_ROLE[architecture]
+    expected_roles = (("entry", entry_role), ("jacket", "jacket-ocj1"),
                       ("controls", "controls-v1"))
+    consumed: set[str] = set()
     for field, role_name in expected_roles:
         if field in fields:
             if role_name not in role_sources:
                 raise Ocg2Error("OCG2_MANIFEST_MISMATCH", f"missing source for {role_name}")
-            files.append((str(fields[field]), ROLES[role_name], role_sources[role_name].read_bytes()))
+            consumed.add(role_name)
+            content = role_sources[role_name].read_bytes()
+            if field == "entry":
+                validate_entry_pe(content, architecture)
+            files.append((str(fields[field]), ROLES[role_name], content))
     for key, source in role_sources.items():
         if key.startswith("data:"):
+            consumed.add(key)
             files.append((key[5:], ROLES["data"], source.read_bytes()))
+    unused = sorted(set(role_sources) - consumed)
+    if unused:
+        raise Ocg2Error("OCG2_MANIFEST_MISMATCH", "unused or wrong-architecture roles: " + ", ".join(unused))
     pub_raw = public_bytes(private_key.public_key())
     key_id = hashlib.sha256(pub_raw).digest()
     index, payload, _ = make_index(str(fields["id"]), str(fields["version"]), key_id, files)
@@ -355,14 +388,20 @@ def decode(data: bytes, public_key: Ed448PublicKey | None = None,
     if cursor != len(index) or previous_end != len(payload) or manifest_i >= len(entries):
         raise Ocg2Error("OCG2_BAD_INDEX", "index coverage mismatch")
     manifests = [i for i, entry in enumerate(entries) if entry.role == ROLES["manifest"]]
-    entry_images = [entry for entry in entries if entry.role == ROLES["entry-x64"]]
+    entry_images = [entry for entry in entries
+                    if entry.role in (ROLES["entry-x64"], ROLES["entry-arm64"])]
     if manifests != [manifest_i] or entries[manifest_i].path != "game.toml" or len(entry_images) != 1:
         raise Ocg2Error("OCG2_BAD_ROLE", "manifest or entry role cardinality mismatch")
     manifest = parse_manifest(entries[manifest_i].data)
     if manifest["id"] != game_id or manifest["version"] != version:
         raise Ocg2Error("OCG2_MANIFEST_MISMATCH", "manifest and index identity disagree")
     by_role = {entry.role: entry.path for entry in entries if entry.role != ROLES["data"]}
-    expected = (("entry", ROLES["entry-x64"]), ("jacket", ROLES["jacket-ocj1"]),
+    architecture = str(manifest["architecture"])
+    expected_entry_role = ROLES[ENTRY_ROLE[architecture]]
+    if entry_images[0].role != expected_entry_role:
+        raise Ocg2Error("OCG2_MANIFEST_MISMATCH", "manifest architecture and entry role disagree")
+    validate_entry_pe(entry_images[0].data, architecture)
+    expected = (("entry", expected_entry_role), ("jacket", ROLES["jacket-ocj1"]),
                 ("controls", ROLES["controls-v1"]))
     for field, role in expected:
         if (field in manifest) != (role in by_role) or field in manifest and manifest[field] != by_role[role]:
@@ -387,7 +426,7 @@ def role_arg(value: str) -> tuple[str, pathlib.Path]:
     if "=" not in value:
         raise argparse.ArgumentTypeError("expected ROLE=FILE or data:PATH=FILE")
     role, source = value.split("=", 1)
-    if role not in ("entry-x64", "jacket-ocj1", "controls-v1") and not role.startswith("data:"):
+    if role not in ("entry-x64", "entry-arm64", "jacket-ocj1", "controls-v1") and not role.startswith("data:"):
         raise argparse.ArgumentTypeError("unknown role")
     return role, pathlib.Path(source)
 
@@ -461,6 +500,7 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""File mappings:
   --file entry-x64=HOST_FILE
+  --file entry-arm64=HOST_FILE
   --file jacket-ocj1=HOST_FILE
   --file controls-v1=HOST_FILE
   --file data:PACKAGE/PATH=HOST_FILE
@@ -481,6 +521,11 @@ name their destination after `data:`. Repeat --file for additional data files.""
         command.add_argument("bundle", type=pathlib.Path, help="input .ocg file")
         command.add_argument("--public-key", type=pathlib.Path,
                              help="raw 57-byte or PEM Ed448 public key")
+    unpack_parser = sub.add_parser("unpack", description="Verify and safely extract an OCG2 bundle.")
+    unpack_parser.add_argument("bundle", type=pathlib.Path, help="input .ocg file")
+    unpack_parser.add_argument("destination", type=pathlib.Path, help="new or empty output directory")
+    unpack_parser.add_argument("--public-key", type=pathlib.Path,
+                               help="optional publisher key used to verify the signature")
     migrate_parser = sub.add_parser("migrate-v1")
     migrate_parser.add_argument("manifest", type=pathlib.Path)
     migrate_parser.add_argument("output", type=pathlib.Path)
@@ -500,6 +545,20 @@ name their destination after `data:`. Repeat --file for additional data files.""
                 raise Ocg2Error("OCG2_UNTRUSTED_KEY", "verify requires --public-key")
             bundle = decode(args.bundle.read_bytes(), key)
             print(json.dumps(report(bundle, key is not None), sort_keys=True, indent=2))
+        elif args.command == "unpack":
+            key = load_public_key(args.public_key) if args.public_key else None
+            bundle = decode(args.bundle.read_bytes(), key)
+            args.destination.mkdir(parents=True, exist_ok=True)
+            if any(args.destination.iterdir()):
+                raise Ocg2Error("OCG2_IO", "unpack destination must be empty")
+            for item in bundle.entries:
+                target = args.destination.joinpath(*item.path.split("/"))
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(item.data)
+            print(json.dumps({"schema": "openconsole.ocg2.unpack.v1",
+                              "destination": str(args.destination),
+                              "files": len(bundle.entries),
+                              "signatureVerified": key is not None}, sort_keys=True))
         else:
             migrated = migrate_v1(args.manifest.read_bytes(), args.version)
             args.output.parent.mkdir(parents=True, exist_ok=True)

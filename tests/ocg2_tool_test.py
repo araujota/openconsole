@@ -42,9 +42,10 @@ def expect(code, callback):
 def main():
     key = Ed448PrivateKey.from_private_bytes(bytes(range(1, 58)))
     key_id = ocg2.hashlib.sha256(ocg2.public_bytes(key.public_key())).digest()
+    x64_efi = (ROOT / "build" / "INPUT-PROBE.EFI").read_bytes()
     index, payload, _ = ocg2.make_index("golden", "1.0.0", key_id, [
         ("game.toml", ocg2.ROLES["manifest"], MANIFEST),
-        ("bin/game.efi", ocg2.ROLES["entry-x64"], b"MZ\x00\x00golden-efi"),
+        ("bin/game.efi", ocg2.ROLES["entry-x64"], x64_efi),
     ])
     bundle_id = ocg2.hashlib.sha256(index).digest()
     total = ocg2.ENVELOPE.size + 114 + len(index) + len(payload)
@@ -81,7 +82,7 @@ min_graphics_abi = 0
     with tempfile.TemporaryDirectory() as directory:
         root = pathlib.Path(directory)
         (root / "game.toml").write_bytes(MANIFEST)
-        (root / "game.efi").write_bytes(b"MZ\x00\x00golden-efi")
+        (root / "game.efi").write_bytes(x64_efi)
         raw_private = key.private_bytes(serialization.Encoding.Raw,
                                         serialization.PrivateFormat.Raw,
                                         serialization.NoEncryption())

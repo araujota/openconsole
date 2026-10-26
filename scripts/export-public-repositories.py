@@ -8,9 +8,10 @@ import hashlib
 import json
 import pathlib
 import shutil
+import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-RUNTIME_DIRS = (".github", "docs", "examples", "include", "patches", "research", "scripts", "src", "tests", "tools", "vendor")
+RUNTIME_DIRS = (".github", "config", "docs", "examples", "host-tools", "include", "patches", "research", "scripts", "src", "tests", "tools", "vendor")
 RUNTIME_FILES = (".gitignore", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "dependency-provenance.json", "LICENSE", "Makefile", "NOTICE", "README.md", "release-version.json", "requirements-analyzer.txt", "sbom.cdx.json", "SECURITY.md", "THIRD_PARTY_NOTICES.md")
 CATALOG_FILES = ("CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "LICENSE", "NOTICE", "SECURITY.md", "release-version.json")
 SKIP_PARTS = {".git", ".next", ".vercel", ".convex", ".quickstart-logs", "node_modules", "test-results", "__pycache__", ".agents", ".claude"}
@@ -21,7 +22,7 @@ PRIVATE_PATTERNS = ("docs/public-release-*",)
 
 def candidates(kind: str) -> list[tuple[pathlib.Path, pathlib.PurePosixPath]]:
     selected: list[tuple[pathlib.Path, pathlib.PurePosixPath]] = []
-    if kind == "runtime":
+    if kind in ("runtime", "runtime-arm64"):
         roots = [ROOT / name for name in RUNTIME_DIRS]
         files = [ROOT / name for name in RUNTIME_FILES]
         for base in roots:
@@ -36,7 +37,8 @@ def candidates(kind: str) -> list[tuple[pathlib.Path, pathlib.PurePosixPath]]:
         for path in files:
             rel = path.relative_to(web) if path.is_relative_to(web) else path.relative_to(ROOT)
             selected.append((path, pathlib.PurePosixPath(rel.as_posix())))
-    overlay = ROOT / "public-repos" / kind
+    overlay_name = "arm64" if kind == "runtime-arm64" else kind
+    overlay = ROOT / "public-repos" / overlay_name
     if overlay.exists():
         for path in overlay.rglob("*"):
             if path.is_file() or path.is_symlink():
@@ -93,7 +95,20 @@ def export(kind: str, destination: pathlib.Path) -> dict[str, object]:
         if data.startswith(b"#!"):
             target.chmod(0o755)
         inventory.append({"path": rel.as_posix(), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
-    manifest = {"schema": "openconsole.public-tree.v1", "kind": kind, "files": inventory}
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    contract_paths = (
+        "include/openconsole/target.h", "include/openconsole/uefi.h",
+        "include/openconsole/ocg2.h", "include/openconsole/manifest.h",
+        "include/openconsole/gles2_protocol.h", "tools/ocg2.py",
+    )
+    contract_hashes = {
+        path: hashlib.sha256((destination / path).read_bytes()).hexdigest()
+        for path in contract_paths if (destination / path).is_file()
+    }
+    manifest = {"schema": "openconsole.public-tree.v2", "kind": kind,
+                "upstreamRevision": revision, "sharedContractHashes": contract_hashes,
+                "files": inventory}
     encoded = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
     (destination / "PUBLIC-SOURCE-INVENTORY.json").write_bytes(encoded)
     return {"kind": kind, "files": len(files), "inventorySha256": hashlib.sha256(encoded).hexdigest(), "output": str(destination)}
@@ -101,7 +116,7 @@ def export(kind: str, destination: pathlib.Path) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("kind", choices=("runtime", "catalog"))
+    parser.add_argument("kind", choices=("runtime", "runtime-arm64", "catalog"))
     parser.add_argument("output", type=pathlib.Path)
     args = parser.parse_args()
     print(json.dumps(export(args.kind, args.output), sort_keys=True))

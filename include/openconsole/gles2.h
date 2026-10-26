@@ -2,8 +2,9 @@
 #define OPENCONSOLE_GLES2_H
 
 #include <stdint.h>
+#include "openconsole/target.h"
 
-#if defined(_WIN32) || defined(__x86_64__)
+#if OC_TARGET_ARCH_X64
 #define OC_GL_API __attribute__((ms_abi))
 #else
 #define OC_GL_API

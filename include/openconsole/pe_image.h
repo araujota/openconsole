@@ -3,8 +3,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "openconsole/target.h"
 
-#define OC_PE_MACHINE_X64 0x8664u
 #define OC_PE_SUBSYSTEM_EFI_APPLICATION 10u
 #define OC_PE_SUBSYSTEM_EFI_BOOT_DRIVER 11u
 #define OC_PE_SUBSYSTEM_EFI_RUNTIME_DRIVER 12u
@@ -43,6 +43,12 @@ typedef struct {
 oc_pe_result oc_pe_validate_x64_efi(const uint8_t *bytes, size_t size,
                                     size_t maximum_size, oc_pe_role role,
                                     oc_pe_info *info);
+oc_pe_result oc_pe_validate_efi(const uint8_t *bytes, size_t size,
+                                size_t maximum_size, oc_pe_role role,
+                                uint16_t expected_machine, oc_pe_info *info);
+oc_pe_result oc_pe_validate_native_efi(const uint8_t *bytes, size_t size,
+                                       size_t maximum_size, oc_pe_role role,
+                                       oc_pe_info *info);
 const char *oc_pe_result_string(oc_pe_result result);
 
 #endif

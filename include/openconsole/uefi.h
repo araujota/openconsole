@@ -2,11 +2,12 @@
 #define OPENCONSOLE_UEFI_H
 
 #include <stdint.h>
+#include "openconsole/target.h"
 
-#if defined(__x86_64__)
+#if OC_TARGET_ARCH_X64
 #define EFIAPI __attribute__((ms_abi))
-#else
-#error "OpenConsole currently targets x86_64 UEFI only"
+#elif OC_TARGET_ARCH_ARM64
+#define EFIAPI
 #endif
 
 typedef void *EFI_HANDLE;

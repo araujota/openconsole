@@ -81,14 +81,15 @@ def _u32(data: bytes, offset: int) -> int:
     return struct.unpack_from("<I", data, offset)[0]
 
 
-def parse_pe(data: bytes) -> tuple[dict[str, int], list[Section]]:
+def parse_pe(data: bytes, architecture: str = "x64") -> tuple[dict[str, int | str], list[Section]]:
     """Parse the same bounded PE32+ EFI application subset as the EFI core."""
     if len(data) < 64 or data[:2] != b"MZ":
         raise ValueError("PE_BAD_DOS")
     pe = _u32(data, 0x3C)
     if pe > len(data) - 24 or data[pe:pe + 4] != b"PE\0\0":
         raise ValueError("PE_BAD_SIGNATURE")
-    if _u16(data, pe + 4) != 0x8664:
+    expected_machine = {"x64": 0x8664, "arm64": 0xAA64}.get(architecture)
+    if expected_machine is None or _u16(data, pe + 4) != expected_machine:
         raise ValueError("PE_BAD_MACHINE")
     count, optional_size = _u16(data, pe + 6), _u16(data, pe + 20)
     optional = pe + 24
@@ -165,7 +166,8 @@ def parse_pe(data: bytes) -> tuple[dict[str, int], list[Section]]:
         raise ValueError("PE_BAD_IMPORT_DIRECTORY")
     if relocations is not None and relocations[1] < 8:
         raise ValueError("PE_BAD_RELOCATION_DIRECTORY")
-    return {"machine": 0x8664, "subsystem": subsystem, "entryRva": entry,
+    return {"machine": expected_machine, "architecture": architecture,
+            "subsystem": subsystem, "entryRva": entry,
             "imageSize": image_size, "sectionCount": count,
             "importBytes": 0 if imports is None else imports[1],
             "relocationBytes": 0 if relocations is None else relocations[1]}, sections
@@ -182,7 +184,8 @@ def _locations(data: bytes, needle: bytes) -> Iterable[int]:
 
 
 def scan_executable(path: str, data: bytes, sections: list[Section],
-                    required_capabilities: set[str], deadline: float) -> list[dict[str, Any]]:
+                    required_capabilities: set[str], deadline: float,
+                    architecture: str = "x64") -> list[dict[str, Any]]:
     executable = [section for section in sections if section.characteristics & 0x20000000]
     if len(executable) > MAX_EXECUTABLE_SECTIONS:
         raise AnalysisLimit("executable section count exceeds budget")
@@ -199,8 +202,13 @@ def scan_executable(path: str, data: bytes, sections: list[Section],
                                virtual_address=va, evidence=data[offset:offset + width]))
 
     if capstone is None:
-        raise AnalysisLimit("the pinned Capstone x86-64 decoder is unavailable")
-    decoder = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+        raise AnalysisLimit(f"the pinned Capstone {architecture} decoder is unavailable")
+    if architecture == "x64":
+        decoder = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+    elif architecture == "arm64":
+        decoder = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_LITTLE_ENDIAN)
+    else:
+        raise AnalysisLimit("unsupported architecture machine-code policy")
     decoder.skipdata = True
     for section in executable:
         if section.characteristics & 0x80000000:
@@ -218,17 +226,24 @@ def scan_executable(path: str, data: bytes, sections: list[Section],
             local = instruction.address - section.virtual_address
             absolute, va = section.raw_offset + local, instruction.address
             mnemonic = instruction.mnemonic.lower()
-            if mnemonic in ("in", "out", "ins", "insb", "insd", "insw",
+            if architecture == "arm64" and mnemonic in (
+                    "msr", "mrs", "sys", "sysl", "dc", "ic", "tlbi", "at",
+                    "hvc", "smc", "eret", "wfi", "wfe"):
+                add("OCSA-ARM64-SYSTEM-INSTRUCTION", "critical", "medium", "block",
+                    "Decoded ARM64 code contains a system or privileged instruction.",
+                    "Use a declared OpenConsole or UEFI protocol instead of direct system control.",
+                    absolute, va, instruction.size)
+            elif architecture == "x64" and mnemonic in ("in", "out", "ins", "insb", "insd", "insw",
                             "outs", "outsb", "outsd", "outsw"):
                 add("OCSA-X64-DIRECT-IO", "critical", "medium", "block",
                     "Decoded x86 code contains a direct port-I/O instruction.",
                     "Use a declared OpenConsole protocol or UEFI protocol instead of direct port I/O.",
                     absolute, va, instruction.size)
-            elif mnemonic in ("cli", "sti", "hlt"):
+            elif architecture == "x64" and mnemonic in ("cli", "sti", "hlt"):
                 add("OCSA-X64-PRIVILEGED", "critical", "medium", "block",
                     "Decoded x86 code contains CLI, STI, or HLT.",
                     "Remove privileged processor-state manipulation.", absolute, va, instruction.size)
-            elif mnemonic == "mov" and ("cr0" in instruction.op_str or
+            elif architecture == "x64" and mnemonic == "mov" and ("cr0" in instruction.op_str or
                                           "cr2" in instruction.op_str or
                                           "cr3" in instruction.op_str or
                                           "cr4" in instruction.op_str or
@@ -239,7 +254,7 @@ def scan_executable(path: str, data: bytes, sections: list[Section],
                     absolute, va, instruction.size)
             elif mnemonic == ".byte":
                 skipped += instruction.size
-            elif mnemonic.startswith("mov") and "0x" in instruction.op_str:
+            elif architecture == "x64" and mnemonic.startswith("mov") and "0x" in instruction.op_str:
                 for token in instruction.op_str.replace("[", " ").replace("]", " ").replace(",", " ").split():
                     try:
                         address = int(token, 16) if token.startswith("0x") else 0
@@ -411,22 +426,28 @@ def analyze(blob: bytes, trusted_keys: dict[bytes, Any] | None = None,
     stages.append({"name": "compatibility", "status": "failed" if unsupported_required else "passed",
                    "unsupportedRequired": unsupported_required,
                    "unsupportedOptional": unsupported_optional})
-    entry = next(item for item in bundle.entries if item.role == ocg2.ROLES["entry-x64"])
+    architecture = str(manifest["architecture"])
+    entry = next(item for item in bundle.entries
+                 if item.role == ocg2.ROLES[ocg2.ENTRY_ROLE[architecture]])
     try:
-        pe_info, sections = parse_pe(entry.data)
+        pe_info, sections = parse_pe(entry.data, architecture)
         stages.append({"name": "pe-coff", "status": "passed", "facts": pe_info})
     except (ValueError, struct.error) as exc:
         code = str(exc) if str(exc) else "PE_TRUNCATED"
         findings.append(finding("OCSA-PE-INVALID", "critical", "verified", "block",
-                                f"The x64 EFI application failed PE/COFF validation: {code}.",
-                                "Link a bounded PE32+ x64 EFI application with subsystem 10 and a valid executable entry point.",
+                                f"The {architecture} EFI application failed PE/COFF validation: {code}.",
+                                f"Link a bounded PE32+ {architecture} EFI application with subsystem 10 and a valid executable entry point.",
                                 file=entry.path, evidence=entry.data[:32]))
         stages.append({"name": "pe-coff", "status": "failed", "code": code})
         return _finish(base, findings, stages)
     try:
         capabilities = set(manifest["required_capabilities"])
-        findings.extend(scan_executable(entry.path, entry.data, sections, capabilities, deadline))
-        stages.append({"name": "machine-code-indicators", "status": "passed"})
+        findings.extend(scan_executable(entry.path, entry.data, sections, capabilities, deadline,
+                                        architecture))
+        stages.append({"name": "machine-code-indicators", "status": "passed",
+                       "architecture": architecture,
+                       "coverage": "capstone-x86-64" if architecture == "x64" else
+                                   "capstone-arm64-system-instructions"})
     except AnalysisLimit as exc:
         findings.append(finding("OCSA-ANALYSIS-BUDGET", "high", "verified", "inconclusive",
                                 str(exc), "Reduce executable size/complexity or request manual review.", file=entry.path))

@@ -1,4 +1,5 @@
 #include "openconsole/manifest.h"
+#include "openconsole/target.h"
 
 enum field_bits {
     FIELD_ID = 1u << 0,
@@ -437,7 +438,8 @@ oc_manifest_result oc_manifest_parse(
     if (!valid_id(out->id)) return result(OC_MANIFEST_INVALID_ID, 0u);
     if (out->title[0] == '\0') return result(OC_MANIFEST_INVALID_VALUE, 0u);
     if (!oc_manifest_relative_path_is_safe(out->entry)) return result(OC_MANIFEST_INVALID_PATH, 0u);
-    if (!string_equal(out->architecture, "x64")) return result(OC_MANIFEST_INCOMPATIBLE, 0u);
+    if (!string_equal(out->architecture, OC_TARGET_ARCH_NAME))
+        return result(OC_MANIFEST_INCOMPATIBLE, 0u);
     if (out->graphics_api == OC_GRAPHICS_GOP && out->accel_policy != OC_ACCEL_FORBIDDEN) {
         return result(OC_MANIFEST_INCOMPATIBLE, 0u);
     }

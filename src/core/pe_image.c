@@ -13,9 +13,9 @@ static int range(size_t offset,size_t length,size_t size) {
 static uint32_t maximum(uint32_t a,uint32_t b){return a>b?a:b;}
 static int power_of_two(uint32_t value){return value!=0u&&(value&(value-1u))==0u;}
 
-oc_pe_result oc_pe_validate_x64_efi(const uint8_t *bytes,size_t size,
-                                    size_t maximum_size,oc_pe_role role,
-                                    oc_pe_info *info) {
+oc_pe_result oc_pe_validate_efi(const uint8_t *bytes,size_t size,
+                                size_t maximum_size,oc_pe_role role,
+                                uint16_t expected_machine,oc_pe_info *info) {
     uint32_t pe_offset,entry_rva,image_size,headers_size,section_alignment,file_alignment;
     uint32_t relocation_rva=0u,relocation_size=0u,directory_count;
     uint16_t sections,optional_size,subsystem;size_t optional,section_table,i;
@@ -29,7 +29,9 @@ oc_pe_result oc_pe_validate_x64_efi(const uint8_t *bytes,size_t size,
     if(!range(pe_offset,24u,size))return OC_PE_TRUNCATED;
     if(bytes[pe_offset]!='P'||bytes[pe_offset+1]!='E'||bytes[pe_offset+2]!=0u||
        bytes[pe_offset+3]!=0u)return OC_PE_BAD_SIGNATURE;
-    if(u16(bytes+pe_offset+4u)!=OC_PE_MACHINE_X64)return OC_PE_BAD_MACHINE;
+    if(expected_machine!=OC_PE_MACHINE_X64&&expected_machine!=OC_PE_MACHINE_ARM64)
+        return OC_PE_BAD_MACHINE;
+    if(u16(bytes+pe_offset+4u)!=expected_machine)return OC_PE_BAD_MACHINE;
     sections=u16(bytes+pe_offset+6u);optional_size=u16(bytes+pe_offset+20u);
     if(sections==0u||sections>OC_PE_MAX_SECTIONS)return OC_PE_LIMIT;
     optional=(size_t)pe_offset+24u;
@@ -73,10 +75,22 @@ oc_pe_result oc_pe_validate_x64_efi(const uint8_t *bytes,size_t size,
     }
     if(!entry_found)return OC_PE_BAD_ENTRY_POINT;
     if(!relocation_found)return OC_PE_BAD_RELOCATION;
-    info->machine=OC_PE_MACHINE_X64;info->subsystem=subsystem;info->section_count=sections;
+    info->machine=expected_machine;info->subsystem=subsystem;info->section_count=sections;
     info->entry_rva=entry_rva;info->image_size=image_size;info->headers_size=headers_size;
     info->relocation_rva=relocation_rva;info->relocation_size=relocation_size;
     return OC_PE_OK;
+}
+
+oc_pe_result oc_pe_validate_x64_efi(const uint8_t *bytes,size_t size,
+                                    size_t maximum_size,oc_pe_role role,
+                                    oc_pe_info *info) {
+    return oc_pe_validate_efi(bytes,size,maximum_size,role,OC_PE_MACHINE_X64,info);
+}
+
+oc_pe_result oc_pe_validate_native_efi(const uint8_t *bytes,size_t size,
+                                       size_t maximum_size,oc_pe_role role,
+                                       oc_pe_info *info) {
+    return oc_pe_validate_efi(bytes,size,maximum_size,role,OC_TARGET_PE_MACHINE,info);
 }
 
 const char *oc_pe_result_string(oc_pe_result result) {
