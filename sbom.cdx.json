@@ -1,0 +1,182 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "82bb2d45f55c4b4fabcc5896b376cbcbcee1e99f3ccc28e4d475d72cf5c3e29c"
+        }
+      ],
+      "name": "patches/edk2/0001-ovmf-snp-only.patch",
+      "type": "file"
+    },
+    {
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "93603b0317322baa463f7069677250cece405f778782f990e3877daca0610895"
+        }
+      ],
+      "name": "patches/edk2/0002-networkpkg-hash2-component.patch",
+      "type": "file"
+    },
+    {
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ae70798e2c6116a9a3c965069c4223d943719a27ac88c5efea7f49436a14c6f2"
+        }
+      ],
+      "name": "patches/edk2/0002-ovmf-usb-mouse-test.patch",
+      "type": "file"
+    },
+    {
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d7de30209eb005c453eaeb3b276167ee15c55c518b074168083aca98a77752c0"
+        }
+      ],
+      "name": "patches/edk2/0003-tls-skip-sni-for-ip-literals.patch",
+      "type": "file"
+    },
+    {
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "da655b5dab21538ecd515d4dd464a5400a93a90de93d576bd689de0481f2cf3c"
+        }
+      ],
+      "name": "patches/edk2/0004-networkpkg-http-timeout-fixed.patch",
+      "type": "file"
+    },
+    {
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7877b847af571e2b064d2628693e24d31affe78b3fd9ab21ccdda9f3ad57e343"
+        }
+      ],
+      "name": "patches/opencore-audiodxe/0001-failure-cleanup.patch",
+      "type": "file"
+    },
+    {
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "26a0278a23d38a887348eb7c80f633f386643b541c862911c883fe7d08a922a8"
+        }
+      ],
+      "name": "patches/opencore-audiodxe/0002-instance-safe-playback-setup.patch",
+      "type": "file"
+    },
+    {
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/acidanthera/OpenCorePkg@78d5ff824992d5b227f842e34d8221eb8f31baf1"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "BSD-3-Clause AND MIT"
+        }
+      ],
+      "name": "acidanthera/OpenCorePkg",
+      "type": "firmware",
+      "version": "78d5ff824992d5b227f842e34d8221eb8f31baf1"
+    },
+    {
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/acidanthera/audk@dfd5516702b4911f1fc1919a429d637b456df913"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "BSD-2-Clause-Patent"
+        }
+      ],
+      "name": "acidanthera/audk",
+      "type": "firmware",
+      "version": "dfd5516702b4911f1fc1919a429d637b456df913"
+    },
+    {
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/tianocore/edk2@0a503bc2f5bd37c7a5d39d0ba31008f446f0298d"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "BSD-2-Clause-Patent"
+        }
+      ],
+      "name": "tianocore/edk2",
+      "type": "firmware",
+      "version": "0a503bc2f5bd37c7a5d39d0ba31008f446f0298d"
+    },
+    {
+      "licenses": [
+        {
+          "expression": "BSD-3-Clause"
+        }
+      ],
+      "name": "capstone",
+      "purl": "pkg:pypi/capstone@5.0.6",
+      "type": "library",
+      "version": "5.0.6"
+    },
+    {
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "cffi",
+      "purl": "pkg:pypi/cffi@2.1.1",
+      "type": "library",
+      "version": "2.1.1"
+    },
+    {
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR BSD-3-Clause"
+        }
+      ],
+      "name": "cryptography",
+      "purl": "pkg:pypi/cryptography@41.0.7",
+      "type": "library",
+      "version": "41.0.7"
+    },
+    {
+      "licenses": [
+        {
+          "expression": "BSD-3-Clause"
+        }
+      ],
+      "name": "pycparser",
+      "purl": "pkg:pypi/pycparser@3.12",
+      "type": "library",
+      "version": "3.12"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "licenses": [
+        {
+          "expression": "Apache-2.0"
+        }
+      ],
+      "name": "openconsole",
+      "type": "application",
+      "version": "0.1.0-dev"
+    }
+  },
+  "serialNumber": "urn:uuid:1be958eb-b13a-5d7f-9cf0-4a9a254048f8",
+  "specVersion": "1.5",
+  "version": 1
+}

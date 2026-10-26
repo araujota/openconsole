@@ -1,0 +1,20 @@
+name: Runtime bug
+description: Report a reproducible OpenConsole runtime or tooling defect
+body:
+  - type: markdown
+    attributes:
+      value: Do not report security vulnerabilities here; use SECURITY.md.
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: Evidence tier
+      options: [Host, OVMF, Physical hardware]
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes: { label: Version or commit }
+    validations: { required: true }
+  - type: textarea
+    id: reproduce
+    attributes: { label: Reproduction and logs }
+    validations: { required: true }

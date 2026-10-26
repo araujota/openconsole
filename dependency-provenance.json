@@ -1,0 +1,87 @@
+{
+  "firmwareUpstreams": [
+    {
+      "license": "BSD-2-Clause-Patent",
+      "name": "tianocore/edk2",
+      "revision": "0a503bc2f5bd37c7a5d39d0ba31008f446f0298d",
+      "url": "https://github.com/tianocore/edk2"
+    },
+    {
+      "license": "BSD-2-Clause-Patent",
+      "name": "acidanthera/audk",
+      "revision": "dfd5516702b4911f1fc1919a429d637b456df913",
+      "url": "https://github.com/acidanthera/audk"
+    },
+    {
+      "license": "BSD-3-Clause AND MIT",
+      "name": "acidanthera/OpenCorePkg",
+      "revision": "78d5ff824992d5b227f842e34d8221eb8f31baf1",
+      "url": "https://github.com/acidanthera/OpenCorePkg"
+    }
+  ],
+  "localPatches": [
+    {
+      "appliesTo": "edk2",
+      "path": "patches/edk2/0001-ovmf-snp-only.patch",
+      "sha256": "82bb2d45f55c4b4fabcc5896b376cbcbcee1e99f3ccc28e4d475d72cf5c3e29c"
+    },
+    {
+      "appliesTo": "edk2",
+      "path": "patches/edk2/0002-networkpkg-hash2-component.patch",
+      "sha256": "93603b0317322baa463f7069677250cece405f778782f990e3877daca0610895"
+    },
+    {
+      "appliesTo": "edk2",
+      "path": "patches/edk2/0002-ovmf-usb-mouse-test.patch",
+      "sha256": "ae70798e2c6116a9a3c965069c4223d943719a27ac88c5efea7f49436a14c6f2"
+    },
+    {
+      "appliesTo": "edk2",
+      "path": "patches/edk2/0003-tls-skip-sni-for-ip-literals.patch",
+      "sha256": "d7de30209eb005c453eaeb3b276167ee15c55c518b074168083aca98a77752c0"
+    },
+    {
+      "appliesTo": "edk2",
+      "path": "patches/edk2/0004-networkpkg-http-timeout-fixed.patch",
+      "sha256": "da655b5dab21538ecd515d4dd464a5400a93a90de93d576bd689de0481f2cf3c"
+    },
+    {
+      "appliesTo": "OpenCorePkg",
+      "path": "patches/opencore-audiodxe/0001-failure-cleanup.patch",
+      "sha256": "7877b847af571e2b064d2628693e24d31affe78b3fd9ab21ccdda9f3ad57e343"
+    },
+    {
+      "appliesTo": "OpenCorePkg",
+      "path": "patches/opencore-audiodxe/0002-instance-safe-playback-setup.patch",
+      "sha256": "26a0278a23d38a887348eb7c80f633f386643b541c862911c883fe7d08a922a8"
+    }
+  ],
+  "npm": [],
+  "python": [
+    {
+      "ecosystem": "pypi",
+      "license": "BSD-3-Clause",
+      "name": "capstone",
+      "version": "5.0.6"
+    },
+    {
+      "ecosystem": "pypi",
+      "license": "Apache-2.0 OR BSD-3-Clause",
+      "name": "cryptography",
+      "version": "41.0.7"
+    },
+    {
+      "ecosystem": "pypi",
+      "license": "MIT",
+      "name": "cffi",
+      "version": "2.1.1"
+    },
+    {
+      "ecosystem": "pypi",
+      "license": "BSD-3-Clause",
+      "name": "pycparser",
+      "version": "3.12"
+    }
+  ],
+  "schema": "openconsole.dependency-provenance.v1"
+}
