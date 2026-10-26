@@ -16,6 +16,7 @@ CATALOG_FILES = ("CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "LICENSE", "NOTICE", "
 SKIP_PARTS = {".git", ".next", ".vercel", ".convex", ".quickstart-logs", "node_modules", "test-results", "__pycache__", ".agents", ".claude"}
 SKIP_SUFFIXES = {".pem", ".key", ".pyc", ".pyo"}
 SECRET_MARKERS = (b"-----BEGIN " + b"PRIVATE KEY-----", b"-----BEGIN ENCRYPTED " + b"PRIVATE KEY-----", b"CONVEX_DEPLOY_KEY" + b"=", b"VERCEL_TOKEN" + b"=", b"VERCEL_OIDC_TOKEN" + b"=")
+PRIVATE_PATTERNS = ("docs/public-release-*",)
 
 
 def candidates(kind: str) -> list[tuple[pathlib.Path, pathlib.PurePosixPath]]:
@@ -50,6 +51,8 @@ def checked_files(kind: str) -> list[tuple[pathlib.Path, pathlib.PurePosixPath, 
     output = []
     seen: set[str] = set()
     for source, rel in candidates(kind):
+        if any(rel.match(pattern) for pattern in PRIVATE_PATTERNS):
+            continue
         if any(part in SKIP_PARTS or part.startswith(".env") for part in rel.parts):
             continue
         if source.suffix.lower() in SKIP_SUFFIXES:

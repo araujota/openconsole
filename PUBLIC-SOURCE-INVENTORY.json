@@ -716,9 +716,9 @@
       "sha256": "eb5599929715b82e743ef2a7ee84c908a96fd31fa228756367a633d4754dff17"
     },
     {
-      "bytes": 5164,
+      "bytes": 5299,
       "path": "scripts/export-public-repositories.py",
-      "sha256": "cb16f3932f4b9b9e182d65d6bd21ebe9c3606cf5503247b0ac0b1f60c924d4cd"
+      "sha256": "d4aeffbe8365a9e7db1c8d2ffc728c48ae5d179a7500c17bd2516e55b79d9fcb"
     },
     {
       "bytes": 1532,
